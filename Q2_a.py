@@ -1,28 +1,9 @@
 import numpy as np
-from sklearn.datasets import load_iris
-import tkinter as tk
+import Utils  # ייבוא המודול
 
 
-# Load and prepare the Iris dataset
-def load_data():
-    iris = load_iris()
-    data = iris.data
-    target = iris.target
-
-    # Filter only Versicolor (label 1) and Virginica (label 2)
-    mask = (target == 1) | (target == 2)
-    data = data[mask]
-    target = target[mask]
-
-    # Use only the second and third features
-    data = data[:, 1:3]  # Petal width and petal length
-    target = target - 1  # Change labels to 0 (Versicolor) and 1 (Virginica)
-    return data, target
 
 
-# Compute classification error
-def compute_error(predictions, true_labels):
-    return np.mean(predictions != true_labels)
 
 
 # Generate all possible thresholds for each feature
@@ -32,21 +13,6 @@ def generate_thresholds(data):
         unique_values = np.unique(data[:, i])
         thresholds[i] = (unique_values[:-1] + unique_values[1:]) / 2  # Midpoints
     return thresholds
-
-
-# Predict labels for a given split
-def predict(tree, data):
-    predictions = []
-    for point in data:
-        node = tree
-        while "label" not in node:
-            feature, threshold = node["split_feature"], node["threshold"]
-            if point[feature] <= threshold:
-                node = node["left"]
-            else:
-                node = node["right"]
-        predictions.append(node["label"])
-    return np.array(predictions)
 
 
 # Recursively generate all trees up to level k
@@ -83,8 +49,8 @@ def generate_all_trees(data, target, thresholds, level, max_level):
             }
 
             # Compute error for this tree
-            predictions = predict(tree, data)
-            error = compute_error(predictions, target)
+            predictions = Utils.predict(tree, data)
+            error = Utils.compute_error(predictions, target)
 
             if error < best_error:
                 best_error = error
@@ -97,53 +63,15 @@ def generate_all_trees(data, target, thresholds, level, max_level):
 def brute_force_tree(data, target, k):
     thresholds = generate_thresholds(data)
     best_tree = generate_all_trees(data, target, thresholds, level=0, max_level=k)
-    predictions = predict(best_tree, data)
-    error = compute_error(predictions, target)
+    predictions = Utils.predict(best_tree, data)
+    error = Utils.compute_error(predictions, target)
     return best_tree, error
-
-
-# Visualize the tree in GUI using tkinter
-def draw_tree(canvas, tree, x, y, x_offset, y_offset, depth=0):
-    if "label" in tree:
-        canvas.create_text(x, y, text=f"Label: {tree['label']}", fill="blue")
-        return
-
-    feature, threshold = tree["split_feature"], tree["threshold"]
-    canvas.create_text(x, y, text=f"F{feature} ≤ {threshold}", fill="black")
-
-    # Calculate positions for left and right branches
-    left_x = x - x_offset // (2 ** depth)
-    right_x = x + x_offset // (2 ** depth)
-    next_y = y + y_offset
-
-    # Draw lines to branches
-    canvas.create_line(x, y, left_x, next_y, fill="gray")
-    canvas.create_line(x, y, right_x, next_y, fill="gray")
-
-    # Draw left and right subtrees
-    draw_tree(canvas, tree["left"], left_x, next_y, x_offset, y_offset, depth + 1)
-    draw_tree(canvas, tree["right"], right_x, next_y, x_offset, y_offset, depth + 1)
-
-
-def visualize_tree_gui(tree):
-    window = tk.Tk()
-    window.title("Decision Tree Visualization")
-
-    canvas_width = 800
-    canvas_height = 600
-    canvas = tk.Canvas(window, width=canvas_width, height=canvas_height, bg="white")
-    canvas.pack()
-
-    # Start drawing tree in the center
-    draw_tree(canvas, tree, canvas_width // 2, 50, canvas_width // 4, 100)
-
-    window.mainloop()
 
 
 # Run the algorithm
 if __name__ == "__main__":
     # Load data
-    data, target = load_data()
+    data, target = Utils.load_data()
 
     # Set maximum depth
     k = 3
@@ -153,7 +81,7 @@ if __name__ == "__main__":
 
     # Print results
     print("Brute-Force Decision Tree:")
-    #print the tree values:
+    # print the tree values:
     print(tree)
-    visualize_tree_gui(tree)
+    Utils.visualize_tree_gui(tree, "Brute-Force Decision Tree")
     print(f"Classification Error: {error:.4f}")
