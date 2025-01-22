@@ -3,13 +3,15 @@ import Utils
 
 
 # Compute entropy
-def compute_entropy(target):
-    # Calculate probabilities of each class
-    class_probs = np.bincount(target) / len(target)
 
-    # Avoid log(0) by adding a small epsilon value
-    entropy = -np.sum(class_probs * np.log2(class_probs + 1e-6))
-    return entropy
+def compute_entropy(target):
+    if len(target) == 0:
+        return 0
+    counts = np.bincount(target.astype(int))
+    probabilities = counts / len(target)
+    # Remove zero probabilities before computing log
+    probabilities = probabilities[probabilities > 0]
+    return -np.sum(probabilities * np.log2(probabilities))
 
 
 # Generate all possible thresholds for each feature
@@ -22,60 +24,75 @@ def generate_thresholds(data):
 
 
 def generate_tree_entropy(data, target, thresholds, level, max_level):
-    if level == max_level or len(np.unique(target)) == 1:
-        # Stop splitting if max depth is reached or data is pure
+    # Base case: if all samples have same label
+    unique_labels = np.unique(target)
+    if len(unique_labels) == 1:
+        return {"label": unique_labels[0]}
+
+    # If max depth reached
+    if level == max_level:
         return {"label": np.round(np.mean(target))}
 
+    current_entropy = compute_entropy(target)
     best_tree = None
-    best_entropy = float("inf")
+    best_gain = 0
+    min_gain = 0.1  # Increased minimum gain threshold
 
     for feature, thres_values in thresholds.items():
         for threshold in thres_values:
-            # Split data
             left_mask = data[:, feature] <= threshold
             right_mask = ~left_mask
 
-            if np.sum(left_mask) == 0 or np.sum(right_mask) == 0:
+            # Skip if either split is too small
+            if np.sum(left_mask) < 2 or np.sum(right_mask) < 2:
                 continue
 
-            left_data, left_target = data[left_mask], target[left_mask]
-            right_data, right_target = data[right_mask], target[right_mask]
+            left_target = target[left_mask]
+            right_target = target[right_mask]
 
-            # Check if any side has only one unique label (if yes, don't split)
-            if len(np.unique(left_target)) == 1 or len(np.unique(right_target)) == 1:
-                continue  # Skip this split if one of the children has only one label
+            # Skip if both splits would result in the same label
+            left_unique = np.unique(left_target)
+            right_unique = np.unique(right_target)
 
-            # Compute entropy before and after the split
-            entropy_before = compute_entropy(target)
-            entropy_left = compute_entropy(left_target)
-            entropy_right = compute_entropy(right_target)
+            # Critical check: Skip if this split would lead to redundant leaf nodes
+            if (len(left_unique) == 1 and len(right_unique) == 1 and
+                    left_unique[0] == right_unique[0]):
+                continue
 
-            # Weighted sum of entropy after split
-            entropy_after = (len(left_target) / len(target)) * entropy_left + (
-                        len(right_target) / len(target)) * entropy_right
+            # Calculate information gain
+            left_entropy = compute_entropy(left_target)
+            right_entropy = compute_entropy(right_target)
+            weighted_entropy = (len(left_target) * left_entropy +
+                                len(right_target) * right_entropy) / len(target)
+            gain = current_entropy - weighted_entropy
 
-            # Choose the split that minimizes entropy
-            if entropy_after < best_entropy:
-                best_entropy = entropy_after
-                # Generate left and right subtrees
-                left_tree = generate_tree_entropy(left_data, left_target, thresholds, level + 1, max_level)
-                right_tree = generate_tree_entropy(right_data, right_target, thresholds, level + 1, max_level)
+            # Only split if we get meaningful information gain
+            if gain > min_gain and gain > best_gain:
+                best_gain = gain
+                # Before creating split, check if resulting nodes would be pure
+                left_tree = ({"label": left_target[0]} if len(np.unique(left_target)) == 1
+                             else generate_tree_entropy(data[left_mask], left_target,
+                                                        thresholds, level + 1, max_level))
+                right_tree = ({"label": right_target[0]} if len(np.unique(right_target)) == 1
+                              else generate_tree_entropy(data[right_mask], right_target,
+                                                         thresholds, level + 1, max_level))
 
-                # Combine into a tree
-                best_tree = {
-                    "split_feature": feature,
-                    "threshold": threshold,
-                    "left": left_tree,
-                    "right": right_tree,
-                }
+                # Only create split if children are different
+                if not (isinstance(left_tree, dict) and isinstance(right_tree, dict) and
+                        'label' in left_tree and 'label' in right_tree and
+                        left_tree['label'] == right_tree['label']):
+                    best_tree = {
+                        "split_feature": feature,
+                        "threshold": threshold,
+                        "left": left_tree,
+                        "right": right_tree
+                    }
 
-    # If no valid split found, return a leaf node with the label
+    # If no good split found
     if best_tree is None:
         return {"label": np.round(np.mean(target))}
 
     return best_tree
-
-
 # Main function to build and evaluate the entropy-based decision tree
 def entropy_tree(data, target, k):
     thresholds = generate_thresholds(data)
@@ -91,7 +108,7 @@ if __name__ == "__main__":
     data, target = Utils.load_data()
 
     # Set maximum depth
-    k = 3
+    k = 2
 
     # Build and evaluate entropy-based decision tree
     tree, error = entropy_tree(data, target, k)

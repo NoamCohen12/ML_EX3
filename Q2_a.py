@@ -74,7 +74,7 @@ if __name__ == "__main__":
     data, target = Utils.load_data()
 
     # Set maximum depth
-    k = 3
+    k = 2
 
     # Build and evaluate brute-force decision tree
     tree, error = brute_force_tree(data, target, k)
