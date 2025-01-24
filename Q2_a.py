@@ -11,7 +11,7 @@ def generate_thresholds(data):
     thresholds = {}
     for i in range(data.shape[1]):
         unique_values = np.unique(data[:, i])
-        thresholds[i] = (unique_values[:-1] + unique_values[1:]) / 2  # Midpoints
+        thresholds[i] = unique_values  # Use unique values directly
     return thresholds
 
 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     data, target = Utils.load_data()
 
     # Set maximum depth
-    k = 3
+    k = 2
 
     # Build and evaluate brute-force decision tree
     tree, error = brute_force_tree(data, target, k)
